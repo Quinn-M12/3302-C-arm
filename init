@@ -1,0 +1,195 @@
+#include <AccelStepper.h>
+
+// Define Pin Connections
+const int stepPin1 = 3, dirPin1 = 2, limitSwitch1 = 8, pot1 = A0;
+const int stepPin2 = 5, dirPin2 = 4, limitSwitch2 = 9, pot2 = A1;
+const int stepPin3 = 7, dirPin3 = 6, limitSwitch3 = 10, pot3 = A2;
+
+// Motor Interface Type (1 = Step & Direction)
+#define motorInterfaceType 1
+AccelStepper stepper1(motorInterfaceType, stepPin1, dirPin1);
+AccelStepper stepper2(motorInterfaceType, stepPin2, dirPin2);
+AccelStepper stepper3(motorInterfaceType, stepPin3, dirPin3);
+
+// Motion Limits
+const int MAX_POSITION = 2000; // Adjust based on your needs
+const int DEBOUNCE_DELAY = 50; // Limit switch debounce time (ms)
+unsigned long lastDebounceTime1 = 0, lastDebounceTime2 = 0, lastDebounceTime3 = 0;
+bool homed1 = false, homed2 = false, homed3 = false;
+
+void setup() {
+    Serial.begin(115200);
+
+    // Set limit switches as inputs with pull-ups enabled
+    pinMode(limitSwitch1, INPUT_PULLUP);
+    pinMode(limitSwitch2, INPUT_PULLUP);
+    pinMode(limitSwitch3, INPUT_PULLUP);
+
+    // Set max speed and acceleration
+    stepper1.setMaxSpeed(2000); stepper1.setAcceleration(500);
+    stepper2.setMaxSpeed(2000); stepper2.setAcceleration(500);
+    stepper3.setMaxSpeed(2000); stepper3.setAcceleration(500);
+
+    // Perform homing sequence for all motors
+    homeMotor(stepper1, limitSwitch1, lastDebounceTime1, homed1);
+    homeMotor(stepper2, limitSwitch2, lastDebounceTime2, homed2);
+    homeMotor(stepper3, limitSwitch3, lastDebounceTime3, homed3);
+
+    Serial.println("Homing Complete");
+
+    // Move motors to their potentiometer positions
+    moveToPotPosition();
+}
+
+void homeMotor(AccelStepper &motor, int limitSwitch, unsigned long &lastDebounceTime, bool &homed) {
+    motor.setSpeed(-2000); // Move toward switch at max speed
+
+    while (!homed) {
+        if (digitalRead(limitSwitch) == LOW) { // Limit switch activated
+            if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) { // Debounce check
+                motor.setCurrentPosition(0);  // Set position to 0
+                motor.move(50); // Move slightly away
+                while (motor.distanceToGo() != 0) {
+                    motor.run();
+                }
+                homed = true;
+            }
+            lastDebounceTime = millis();
+        }
+        motor.runSpeed();
+    }
+}
+
+void moveToPotPosition() {
+    stepper1.moveTo(map(analogRead(pot1), 0, 1023, 0, MAX_POSITION));
+    stepper2.moveTo(map(analogRead(pot2), 0, 1023, 0, MAX_POSITION));
+    stepper3.moveTo(map(analogRead(pot3), 0, 1023, 0, MAX_POSITION));
+}
+
+void loop() {
+    // Read potentiometer values and move motors within limits
+    int target1 = map(analogRead(pot1), 0, 1023, 0, MAX_POSITION);
+    int target2 = map(analogRead(pot2), 0, 1023, 0, MAX_POSITION);
+    int target3 = map(analogRead(pot3), 0, 1023, 0, MAX_POSITION);
+
+    if (target1 >= 0 && target1 <= MAX_POSITION) stepper1.moveTo(target1);
+    if (target2 >= 0 && target2 <= MAX_POSITION) stepper2.moveTo(target2);
+    if (target3 >= 0 && target3 <= MAX_POSITION) stepper3.moveTo(target3);
+
+    stepper1.run();
+    stepper2.run();
+    stepper3.run();
+}
+
+
+With lcd display 
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <AccelStepper.h>
+
+// LCD Setup (16x2, I2C Address 0x27)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Define Pin Connections
+const int stepPin1 = 3, dirPin1 = 2, limitSwitch1 = 8, pot1 = A0;
+const int stepPin2 = 5, dirPin2 = 4, limitSwitch2 = 9, pot2 = A1;
+const int stepPin3 = 7, dirPin3 = 6, limitSwitch3 = 10, pot3 = A2;
+
+// Motor Interface Type (1 = Step & Direction)
+#define motorInterfaceType 1
+AccelStepper stepper1(motorInterfaceType, stepPin1, dirPin1);
+AccelStepper stepper2(motorInterfaceType, stepPin2, dirPin2);
+AccelStepper stepper3(motorInterfaceType, stepPin3, dirPin3);
+
+// Motion Limits
+const int MAX_POSITION = 2000;
+const int DEBOUNCE_DELAY = 50;
+unsigned long lastDebounceTime1 = 0, lastDebounceTime2 = 0, lastDebounceTime3 = 0;
+bool homed1 = false, homed2 = false, homed3 = false;
+
+void setup() {
+    Serial.begin(115200);
+    
+    // LCD Initialization
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Homing...");
+
+    // Set limit switches as inputs with pull-ups enabled
+    pinMode(limitSwitch1, INPUT_PULLUP);
+    pinMode(limitSwitch2, INPUT_PULLUP);
+    pinMode(limitSwitch3, INPUT_PULLUP);
+
+    // Set max speed and acceleration
+    stepper1.setMaxSpeed(2000); stepper1.setAcceleration(500);
+    stepper2.setMaxSpeed(2000); stepper2.setAcceleration(500);
+    stepper3.setMaxSpeed(2000); stepper3.setAcceleration(500);
+
+    // Perform homing sequence
+    homeMotor(stepper1, limitSwitch1, lastDebounceTime1, homed1);
+    homeMotor(stepper2, limitSwitch2, lastDebounceTime2, homed2);
+    homeMotor(stepper3, limitSwitch3, lastDebounceTime3, homed3);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Homing Done");
+
+    delay(1000); // Show message for 1 second
+    lcd.clear();
+
+    // Move motors to their potentiometer positions
+    moveToPotPosition();
+}
+
+void homeMotor(AccelStepper &motor, int limitSwitch, unsigned long &lastDebounceTime, bool &homed) {
+    motor.setSpeed(-2000);
+    while (!homed) {
+        if (digitalRead(limitSwitch) == LOW) { // Limit switch triggered
+            if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+                motor.setCurrentPosition(0);
+                motor.move(50); // Move away slightly
+                while (motor.distanceToGo() != 0) {
+                    motor.run();
+                }
+                homed = true;
+            }
+            lastDebounceTime = millis();
+        }
+        motor.runSpeed();
+    }
+}
+
+void moveToPotPosition() {
+    stepper1.moveTo(map(analogRead(pot1), 0, 1023, 0, MAX_POSITION));
+    stepper2.moveTo(map(analogRead(pot2), 0, 1023, 0, MAX_POSITION));
+    stepper3.moveTo(map(analogRead(pot3), 0, 1023, 0, MAX_POSITION));
+}
+
+void loop() {
+    // Read potentiometer values and move motors within limits
+    int target1 = map(analogRead(pot1), 0, 1023, 0, MAX_POSITION);
+    int target2 = map(analogRead(pot2), 0, 1023, 0, MAX_POSITION);
+
+    if (target1 >= 0 && target1 <= MAX_POSITION) stepper1.moveTo(target1);
+    if (target2 >= 0 && target2 <= MAX_POSITION) stepper2.moveTo(target2);
+
+    stepper1.run();
+    stepper2.run();
+    stepper3.run();
+
+    // Display positions on LCD
+    lcd.setCursor(0, 0);
+    lcd.print("Ang1:");
+    lcd.print(map(target1, 0, MAX_POSITION, 0, 360)); // Convert steps to degrees
+    lcd.print(" L1:");
+    lcd.print(target1);
+
+    lcd.setCursor(0, 1);
+    lcd.print("Ang2:");
+    lcd.print(map(target2, 0, MAX_POSITION, 0, 360)); // Convert steps to degrees
+    lcd.print(" L2:");
+    lcd.print(target2);
+
+    delay(200); // Update display every 200ms
+}
